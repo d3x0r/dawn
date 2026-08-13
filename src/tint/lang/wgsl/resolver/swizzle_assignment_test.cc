@@ -26,6 +26,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "src/tint/lang/core/enums.h"
+#include "src/tint/lang/core/type/swizzle_view.h"
 #include "src/tint/lang/wgsl/resolver/resolver.h"
 #include "src/tint/lang/wgsl/resolver/resolver_helper_test.h"
 
@@ -51,6 +52,30 @@ TEST_F(ResolverSwizzleAssignmentTest, LanguageFeatureDisabled) {
     EXPECT_EQ(
         resolver.error(),
         R"(1:2 error: cannot assign to value of type 'swizzle<private, vec2<f32>, read_write, 4, 2>')");
+}
+
+TEST_F(ResolverSwizzleAssignmentTest, SingleElementChainedSwizzleRead_LanguageFeatureDisabled) {
+    // var v : vec4f;
+    // let f = v.xy.x;
+    //
+    // Reading a single element of a swizzle view must produce a view even when swizzle
+    // assignment is not allowed: the multi-element swizzle is a view regardless of the feature,
+    // and the index form (`v.xy[0]`) is a view too. Typing this one as a plain value produces IR
+    // whose access chain has a view object but a value result, which fails IR validation and
+    // which LowerSwizzleView cannot lower.
+    GlobalVar("v", ty.vec4<f32>(), core::AddressSpace::kPrivate);
+    auto* expr = MemberAccessor(MemberAccessor("v", "xy"), "x");
+    WrapInFunction(Decl(Let("f", expr)));
+
+    wgsl::AllowedFeatures allowed_features{};
+
+    Resolver resolver{this, allowed_features};
+    ASSERT_TRUE(resolver.Resolve()) << resolver.error();
+
+    auto* sem = Sem().Get(expr);
+    ASSERT_NE(sem, nullptr);
+    EXPECT_TRUE(sem->Unwrap()->Type()->Is<core::type::SwizzleView>())
+        << sem->Unwrap()->Type()->FriendlyName();
 }
 
 TEST_F(ResolverSwizzleAssignmentTest, SimpleSwizzleAssignment) {

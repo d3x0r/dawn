@@ -3569,11 +3569,12 @@ sem::ValueExpression* Resolver::MemberAccessor(const ast::MemberAccessorExpressi
                 if (memory_view && !memory_view->Is<core::type::SwizzleView>()) {
                     ty = b.create<core::type::Reference>(memory_view->AddressSpace(), ty,
                                                          memory_view->Access());
-                } else if (memory_view && memory_view->Is<core::type::SwizzleView>() &&
-                           allowed_features_.features.contains(
-                               wgsl::LanguageFeature::kSwizzleAssignment)) {
-                    // If the swizzle assignment language feature is enabled, a single element
-                    // swizzle into a swizzle view must also be a swizzle view.
+                } else if (memory_view && memory_view->Is<core::type::SwizzleView>()) {
+                    // A single element swizzle into a swizzle view must also be a swizzle view,
+                    // whether or not swizzle assignment is enabled: the multi-element swizzle
+                    // below always produces a view for a memory view object, and IR lowering
+                    // requires an access into a swizzle view to yield a view as well. Typing it
+                    // as a plain value produces IR that LowerSwizzleView cannot lower.
                     ty = b.create<core::type::SwizzleView>(memory_view->AddressSpace(), ty,
                                                            memory_view->Access(), vec->Width(),
                                                            static_cast<uint32_t>(size));
